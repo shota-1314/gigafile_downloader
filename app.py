@@ -7,8 +7,9 @@ from linebot.v3.messaging import (
 	TextMessage, PostbackAction
 )
 from linebot.v3.webhooks import (
-	FollowEvent, MessageEvent, PostbackEvent, TextMessageContent
+	FollowEvent, MessageEvent, PostbackEvent, TextMessageContent, 
 )
+
 import os
 import re
 from datetime import datetime
@@ -38,7 +39,9 @@ app = Flask(__name__)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
-pattern:str = r"https://gigafile\.nu/[a-zA-Z0-9]+"
+pattern:str = r"https://\d{1,2}\.gigafile\.nu/[a-zA-Z0-9\-]+"
+group_line_id:str = 'C1b2c6d35f278a550903d14ae0373d4d7'
+user_id:str = 'U878d04bfc79632d6da1c44dc35a1a1c7'
 
 
 ## コールバックのおまじない
@@ -83,35 +86,46 @@ def handle_message(event):
 	## 受信メッセージの中身を取得
 	received_message = event.message.text
 
-	## APIを呼んで送信者のプロフィール取得
+    # C1b2c6d35f278a550903d14ae0373d4d7
+	## APIを呼んでグループIDのプロフィール取得
 	profile = line_bot_api.get_profile(event.source.user_id)
 	display_name = profile.display_name
 
 	is_match = re.search(pattern,received_message)
 	if is_match:
 		gigafile_url:str = is_match.group(0)
-		message:str = """
-            @{display_name}
-            ギガファイル便のURLを検出しました。
-			ダウンロードを開始します。
-			リンク : {link}
-			保存先 : {save_pass}
-			日時 : {now_time}
-        """.format(
+		message:str =   'ギガファイル便のURLを検出しました。\n'\
+			            'ダウンロードを開始します。\n'\
+			            'リンク : {link} \n'\
+			            '保存先 : {save_pass} \n'\
+			            '日時 : {now_time} \n'.format(
 			display_name = display_name,
 			link = gigafile_url,
 			save_pass = DOWNLOAD_PASS,
 			now_time = __get_time_jpn()
         )
 
-		__reply_message(event, message)
+		line_bot_api.reply_message(ReplyMessageRequest(
+            replyToken=event.reply_token,
+            messages=[TextMessage(text=message)]
+        ))
 
-		__download()
+		__download(gigafile_url)
 
 		is_compleated:bool = __wait_for_download_completion()
 
 		if is_compleated:
-			__reply_message(event, "全てのダウンロードが完了しました。")
+			comp_message:str =   'ダウンロードが完了しました。\n'\
+			            'リンク : {link} \n'\
+			            '保存先 : {save_pass} \n'\
+			            '日時 : {now_time} \n'.format(
+                display_name = display_name,
+                link = gigafile_url,
+                save_pass = DOWNLOAD_PASS,
+                now_time = __get_time_jpn()
+            )
+
+			__push_message(comp_message)
 
 
 ## 起動確認用ウェブサイトのトップページ
@@ -119,15 +133,12 @@ def handle_message(event):
 def toppage():
 	return 'Hello world!'
 
-## LINE メッセージ返信共通関数
-def __reply_message(event:MessageEvent, message:str):
 
-	## APIインスタンス化
+def __push_message(messages:str):
 	with ApiClient(configuration) as api_client:
 		line_bot_api = MessagingApi(api_client)
-	line_bot_api.reply_message(ReplyMessageRequest(
-		replyToken=event.reply_token,
-		messages=[TextMessage(text=message)]
+	line_bot_api.push_message(PushMessageRequest(
+		to=user_id,messages=[TextMessage(text=messages)]
 	))
 
 
@@ -141,7 +152,7 @@ def __get_time_jpn() -> str:
 
     return formatted_date_jp
 
-def __download(url):
+def __download(url:str):
     global driver
     options = Options()
     options.page_load_strategy = 'eager'
