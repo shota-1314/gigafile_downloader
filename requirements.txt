@@ -14,12 +14,14 @@ Deprecated==1.2.14
 Flask==3.0.3
 frozenlist==1.4.1
 future==1.0.0
+gunicorn==22.0.0
 idna==3.7
 itsdangerous==2.2.0
 Jinja2==3.1.4
 line-bot-sdk==3.11.0
 MarkupSafe==2.1.5
 multidict==6.0.5
+packaging==24.1
 pydantic==2.7.3
 pydantic_core==2.18.4
 python-dateutil==2.9.0.post0
