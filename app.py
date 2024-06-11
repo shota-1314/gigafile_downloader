@@ -86,7 +86,6 @@ def handle_message(event):
 	## 受信メッセージの中身を取得
 	received_message = event.message.text
 
-    # C1b2c6d35f278a550903d14ae0373d4d7
 	## APIを呼んでグループIDのプロフィール取得
 	profile = line_bot_api.get_profile(event.source.user_id)
 	display_name = profile.display_name
@@ -138,7 +137,7 @@ def __push_message(messages:str):
 	with ApiClient(configuration) as api_client:
 		line_bot_api = MessagingApi(api_client)
 	line_bot_api.push_message(PushMessageRequest(
-		to=user_id,messages=[TextMessage(text=messages)]
+		to=group_line_id,messages=[TextMessage(text=messages)]
 	))
 
 
