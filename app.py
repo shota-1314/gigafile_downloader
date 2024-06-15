@@ -42,6 +42,7 @@ handler = WebhookHandler(CHANNEL_SECRET)
 pattern:str = r"https://\d{1,2}\.gigafile\.nu/[a-zA-Z0-9\-]+"
 group_line_id:str = 'C1b2c6d35f278a550903d14ae0373d4d7'
 user_id:str = 'U878d04bfc79632d6da1c44dc35a1a1c7'
+chat_type:str = 'user'
 
 
 ## コールバックのおまじない
@@ -86,6 +87,11 @@ def handle_message(event):
 	## 受信メッセージの中身を取得
 	received_message = event.message.text
 
+    
+	send_to:str = user_id
+	if event.source.type == 'group':
+		send_to = event.source.group_id
+	
 	## APIを呼んでグループIDのプロフィール取得
 	profile = line_bot_api.get_profile(event.source.user_id)
 	display_name = profile.display_name
@@ -124,7 +130,7 @@ def handle_message(event):
                 now_time = __get_time_jpn()
             )
 
-			__push_message(comp_message)
+			__push_message(send_to, comp_message)
 
 
 ## 起動確認用ウェブサイトのトップページ
@@ -133,11 +139,11 @@ def toppage():
 	return 'Hello world!'
 
 
-def __push_message(messages:str):
+def __push_message(send_to:str, messages:str):
 	with ApiClient(configuration) as api_client:
 		line_bot_api = MessagingApi(api_client)
 	line_bot_api.push_message(PushMessageRequest(
-		to=group_line_id,messages=[TextMessage(text=messages)]
+		to=send_to, messages=[TextMessage(text=messages)]
 	))
 
 
@@ -152,19 +158,23 @@ def __get_time_jpn() -> str:
     return formatted_date_jp
 
 def __download(url:str):
-    global driver
-    options = Options()
-    options.page_load_strategy = 'eager'
-    options.add_experimental_option("prefs", {
+	global driver
+	options = Options()
+	options.page_load_strategy = 'eager'
+	options.add_argument('--no-sandbox')
+	options.add_argument('--headless')
+	options.add_argument('--disable-dev-shm-usage')
+	options.page_load_strategy = 'eager'
+	options.add_experimental_option("prefs", {
         "download.default_directory": DOWNLOAD_PASS,
         "download.prompt_for_download": False,
     })
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    driver.get(url)
-    element = driver.find_element("xpath", "//button[text()='まとめてダウンロード']")
-    driver.execute_script("arguments[0].scrollIntoView();", element)
-    element.click()
-    time.sleep(5)
+	driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+	driver.get(url)
+	element = driver.find_element("xpath", "//button[text()='まとめてダウンロード']")
+	driver.execute_script("arguments[0].scrollIntoView();", element)
+	element.click()
+	time.sleep(5)
 
 
 def __wait_for_download_completion() -> bool:
