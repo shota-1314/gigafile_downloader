@@ -156,16 +156,20 @@ def __download(url:str):
     global driver
     options = Options()
     options.page_load_strategy = 'eager'
-    options.add_argument('--no-sandbox')
     options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--remote-debugging-port=9222')
 	# options.page_load_strategy = 'eager'
     options.add_experimental_option("prefs", {
         "download.default_directory": DOWNLOAD_PASS,
         "download.prompt_for_download": False,
     })
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver.set_window_size(950, 800)
     driver.get(url)
+    
     if len(driver.find_elements("xpath", "//button[text()='まとめてダウンロード']")) > 0:
         element = driver.find_element("xpath", "//button[text()='まとめてダウンロード']")
         driver.execute_script("arguments[0].scrollIntoView();", element)
