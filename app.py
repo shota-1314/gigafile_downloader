@@ -189,4 +189,4 @@ def __wait_for_download_completion() -> bool:
 ## ボット起動コード
 if __name__ == "__main__":
 	## ローカルでテストする時のために、`debug=True` にしておく
-	app.run(host="0.0.0.0", port=8000, debug=True)
+	app.run()
