@@ -156,9 +156,9 @@ def __download(url:str):
     global driver
     options = Options()
     options.page_load_strategy = 'eager'
-	# options.add_argument('--no-sandbox')
-	# options.add_argument('--headless')
-	# options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--headless')
+    options.add_argument('--disable-dev-shm-usage')
 	# options.page_load_strategy = 'eager'
     options.add_experimental_option("prefs", {
         "download.default_directory": DOWNLOAD_PASS,
