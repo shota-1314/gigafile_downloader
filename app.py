@@ -87,6 +87,9 @@ def handle_message(event):
 	## 受信メッセージの中身を取得
 	received_message = event.message.text
 
+	if '/schedule' in received_message:
+		__check_schedule()
+
     
 	send_to:str = user_id
 	if event.source.type == 'group':
@@ -153,34 +156,31 @@ def __get_time_jpn() -> str:
     return formatted_date_jp
 
 def __download(url:str):
-    global driver
-    options = Options()
-    options.page_load_strategy = 'eager'
-    options.add_argument('--headless')
-    options.add_argument('--disable-gpu')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--remote-debugging-port=9222')
+	download_url:str = ""
+	global driver
+	options = Options()
+	options.page_load_strategy = 'eager'
+	options.add_argument('--headless')
+	options.add_argument('--disable-gpu')
+	options.add_argument('--no-sandbox')
+	options.add_argument('--disable-dev-shm-usage')
+	options.add_argument('--remote-debugging-port=9222')
 	# options.page_load_strategy = 'eager'
-    options.add_experimental_option("prefs", {
+	options.add_experimental_option("prefs", {
         "download.default_directory": DOWNLOAD_PASS,
         "download.prompt_for_download": False,
     })
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    driver.set_window_size(950, 800)
-    driver.get(url)
+	driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+	driver.set_window_size(950, 800)
+	driver.get(url)
+	driver.get_cookies()
     
-    if len(driver.find_elements("xpath", "//button[text()='まとめてダウンロード']")) > 0:
-        element = driver.find_element("xpath", "//button[text()='まとめてダウンロード']")
-        driver.execute_script("arguments[0].scrollIntoView();", element)
-        element.click()
-        time.sleep(5)
-    else:
-        element = driver.find_element("xpath", "//button[text()='ダウンロード開始']")
-        driver.execute_script("arguments[0].scrollIntoView();", element)
-        element.click()
-        time.sleep(5)
-
+	if len(driver.find_elements("xpath", "//button[text()='まとめてダウンロード']")) > 0:
+		download_url = url + "/download.php?file=" + url.split("/")[-1]
+		
+	else:
+		download_url = url + "/dl_zip.php?file=" + url.split("/")[-1]
+		
 
 def __wait_for_download_completion() -> bool:
     while True:
@@ -190,7 +190,98 @@ def __wait_for_download_completion() -> bool:
             return True
         time.sleep(1)
 
+def __check_schedule():
+	global driver
+	options = Options()
+	options.page_load_strategy = 'eager'
+	options.add_argument('--headless')
+	options.add_argument('--disable-gpu')
+	options.add_argument('--no-sandbox')
+	options.add_argument('--disable-dev-shm-usage')
+	options.add_argument('--remote-debugging-port=9222')
+	driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+	driver.set_window_size(950, 800)
+	driver.get('https://www.studio246.net/mypage/login.php')
+	name_box = driver.find_element(By.NAME,'login_mail')
+	name_box.send_keys("syota.mail.magazine5396@gmail.com")
+	password_box = driver.find_element(By.NAME,'login_pass')
+	password_box.send_keys("r13143256")
+	login_btn = driver.find_element(By.NAME,'Submit_login')
+	login_btn.click()
+	driver.implicitly_wait(2)
+	driver.get_cookies()
+	driver.get('https://www.studio246.net/mypage/history.php?t=1718881330')
+	tables = driver.find_elements(By.TAG_NAME, 'table')
+	for idx, table in enumerate(tables):
+		table_num = idx + 1
+
+		# 利用日時を取得する
+		studio_days = table.find_elements("xpath", "//*[@id='contents']/table[{}]/tbody/tr[2]/td/div[1]/p[2]".format(table_num))[0].text
+
+		# 利用日時を日付変換し、現在時間との比較を行う
+		if __judge_studio_days(studio_days):
+
+			# display:noneとなっている要素があるため
+			# 先にクリックしておく
+			table_click = table.find_element("xpath", "//*[@id='contents']/table[{}]/tbody/tr[2]".format(table_num))
+			table_click.click()
+			
+			# 0時のより後の場合のみ処理を行う
+			# スタジオ名
+			studio_name = table.find_elements("xpath", "//*[@id='contents']/table[{}]/tbody/tr[2]/td/div[1]/p[1]/span".format(table_num))[0].text
+			# 開始時間:終了時間を取得
+			date_end_time_str = table.find_elements("xpath", "//*[@id='contents']/table[{}]/tbody/tr[3]/td".format(table_num))[0].accessible_name
+			# 開始時間を取得
+			start_date = __change_date_element_to_string(date_end_time_str, 'start')
+			end_date = __change_date_element_to_string(date_end_time_str, 'end')
+			print(start_date)
+
+def __judge_studio_days(studio_days:str) -> bool:
+
+	res_value:bool = False
+	pattern = r"利用日時：(\d{4}/\d{2}/\d{2}（[^）]+）\d{2}:\d{2})"
+
+	date_match = re.search(pattern, studio_days)
+	if date_match:
+		datetime_str = date_match.group(1)
+		# 日付部分と時刻部分を分離
+		date_part, time_part = datetime_str.split('）')
+		idx = date_part.find('（')
+		date_part = date_part[:idx]
+		date_time_str = f"{date_part} {time_part}"
+
+		# 文字列をdatetimeオブジェクトに変換
+		dt_format = "%Y/%m/%d %H:%M"
+		datetime_obj = datetime.strptime(date_time_str, dt_format)
+
+		# 今日の0時のdatetimeオブジェクトを作成
+		today_midnight = datetime.combine(datetime.today(), datetime.min.time())
+
+		# 日付が今日の0時より前かどうかを判定
+		if datetime_obj > today_midnight:
+			res_value = True
+	
+	return res_value
+
+def __change_date_element_to_string(date_end_time_str:str, pattern_key:str) -> str:
+
+	
+	pattern_start = r"開始日時：(\d{4}/\d{2}/\d{2}（[^）]+）\d{2}:\d{2}) 終了日時：(\d{4}/\d{2}/\d{2}（[^）]+）\d{2}:\d{2})"
+	pattern_end = r"利用日時：(\d{4}/\d{2}/\d{2}（[^）]+）\d{2}:\d{2})"
+
+	datetime_matches = re.findall(r'[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}', date_end_time_str)
+	# for date in datetime_matches[0]:
+	# 	print(date)
+
+	# 抽出された日時をdatetimeオブジェクトに変換してリスト化
+	datetime_list = [datetime.strptime(dt_str, '%Y/%m/%d %H:%M') for dt_str in datetime_matches[0]]
+	print(datetime_list)
+
+
+
+
 ## ボット起動コード
 if __name__ == "__main__":
 	## ローカルでテストする時のために、`debug=True` にしておく
-	app.run()
+	app.run(host="0.0.0.0", port=5000)
+	# app.run()
