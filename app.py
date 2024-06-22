@@ -88,7 +88,7 @@ def handle_message(event):
 	received_message = event.message.text
 
 	if '/schedule' in received_message:
-		__check_schedule()
+		__get_246_schedule()
 
     
 	send_to:str = user_id
@@ -134,6 +134,7 @@ def handle_message(event):
 ## 起動確認用ウェブサイトのトップページ
 @app.route('/', methods=['GET'])
 def toppage():
+	__get_bass_on_top_schedule()
 	return 'Hello world!'
 
 
@@ -190,7 +191,7 @@ def __wait_for_download_completion() -> bool:
             return True
         time.sleep(1)
 
-def __check_schedule():
+def __get_246_schedule():
 	global driver
 	options = Options()
 	options.page_load_strategy = 'eager'
@@ -231,10 +232,66 @@ def __check_schedule():
 			studio_name = table.find_elements("xpath", "//*[@id='contents']/table[{}]/tbody/tr[2]/td/div[1]/p[1]/span".format(table_num))[0].text
 			# 開始時間:終了時間を取得
 			date_end_time_str = table.find_elements("xpath", "//*[@id='contents']/table[{}]/tbody/tr[3]/td".format(table_num))[0].accessible_name
-			# 開始時間を取得
-			start_date = __change_date_element_to_string(date_end_time_str, 'start')
-			end_date = __change_date_element_to_string(date_end_time_str, 'end')
-			print(start_date)
+			# 開始時間/終了時間をリストに変換
+			date_list = __change_date_element_to_string(date_end_time_str)
+			# 予約番号を取得
+			reservation_number = table.find_elements("xpath", "//*[@id='contents']/table[{}]/tbody/tr[5]/td".format(table_num))[0].text
+			
+			print(date_list)
+
+
+def __get_bass_on_top_schedule():
+	global driver
+	options = Options()
+	options.page_load_strategy = 'eager'
+	options.add_argument('--headless')
+	options.add_argument('--disable-gpu')
+	options.add_argument('--no-sandbox')
+	options.add_argument('--disable-dev-shm-usage')
+	options.add_argument('--remote-debugging-port=9222')
+	driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+	driver.set_window_size(950, 800)
+	driver.get('https://studi-ol.com/')
+	# ログイン情報入力
+	flowting_btn = driver.find_element("xpath",'//*[@id="home"]/div[2]/header/div/div/nav/div/div[1]/ul/li/a')
+	flowting_btn.click()
+	name_box = driver.find_element("xpath", '//*[@id="email"]')
+	name_box.send_keys("shota.5396@gmail.com")
+	password_box = driver.find_element("xpath", '//*[@id="password"]')
+	password_box.send_keys("r13143256")
+	login_btn = driver.find_element("xpath",'//*[@id="home"]/div[2]/header/div/div/nav/div/div[1]/ul/li/div/form/p/button')
+	login_btn.click()
+	driver.implicitly_wait(3)
+	driver.get_cookies()
+	driver.get('https://studi-ol.com/user')
+	tables = driver.find_element("xpath", '//*[@id="sb-site"]/div[3]/div/div[2]/div[1]/div[2]/div/div[2]')
+	reservation_list = tables.find_elements(By.CLASS_NAME, 'text-left')
+	for idx, table in enumerate(reservation_list):
+		table_num = idx + 2
+
+		# 利用日時を取得する
+		studio_days = table.find_elements("xpath", "//*[@id='sb-site']/div[3]/div/div[2]/div[1]/div[2]/div/div[2]/div[{}]/p[2]".format(table_num))[0].text
+
+		# 利用日時を日付変換し、現在時間との比較を行う
+		if __judge_studio_days(studio_days):
+
+			# display:noneとなっている要素があるため
+			# 先にクリックしておく
+			table_click = table.find_element("xpath", "//*[@id='contents']/table[{}]/tbody/tr[2]".format(table_num))
+			table_click.click()
+			
+			# 0時のより後の場合のみ処理を行う
+			# スタジオ名
+			studio_name = table.find_elements("xpath", "//*[@id='contents']/table[{}]/tbody/tr[2]/td/div[1]/p[1]/span".format(table_num))[0].text
+			# 開始時間:終了時間を取得
+			date_end_time_str = table.find_elements("xpath", "//*[@id='contents']/table[{}]/tbody/tr[3]/td".format(table_num))[0].accessible_name
+			# 開始時間/終了時間をリストに変換
+			date_list = __change_date_element_to_string(date_end_time_str)
+			# 予約番号を取得
+			reservation_number = table.find_elements("xpath", "//*[@id='contents']/table[{}]/tbody/tr[5]/td".format(table_num))[0].text
+			
+			print(date_list)
+
 
 def __judge_studio_days(studio_days:str) -> bool:
 
@@ -263,21 +320,28 @@ def __judge_studio_days(studio_days:str) -> bool:
 	
 	return res_value
 
-def __change_date_element_to_string(date_end_time_str:str, pattern_key:str) -> str:
+def __change_date_element_to_string(date_end_time_str:str) -> list:
 
+	# 返却値
+	res_datetime_list:list = []
 	
-	pattern_start = r"開始日時：(\d{4}/\d{2}/\d{2}（[^）]+）\d{2}:\d{2}) 終了日時：(\d{4}/\d{2}/\d{2}（[^）]+）\d{2}:\d{2})"
-	pattern_end = r"利用日時：(\d{4}/\d{2}/\d{2}（[^）]+）\d{2}:\d{2})"
+	# 曜日を削除
+	cleaned_text = re.sub(r'（.*?）', ' ', date_end_time_str)
 
-	datetime_matches = re.findall(r'[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}', date_end_time_str)
-	# for date in datetime_matches[0]:
-	# 	print(date)
+	# 抽出
+	dates_times = re.findall(r'\d{4}/\d{2}/\d{2} \d{2}:\d{2}', cleaned_text)
 
 	# 抽出された日時をdatetimeオブジェクトに変換してリスト化
-	datetime_list = [datetime.strptime(dt_str, '%Y/%m/%d %H:%M') for dt_str in datetime_matches[0]]
-	print(datetime_list)
+	# 日付オブジェクトと文字列型を格納
+	if len(dates_times) != 0:
+		for date in dates_times:
+			obj:object = {
+				'date_obj': datetime.strptime(date, '%Y/%m/%d %H:%M'),
+				'date_string': date
+			}
+			res_datetime_list.append(obj)
 
-
+	return res_datetime_list
 
 
 ## ボット起動コード
